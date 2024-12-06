@@ -17,25 +17,24 @@ var MOVE = map[byte][2]int{
 const (
 	OBSTACLE = '#'
 	EMPTY    = '.'
-	EXTRA    = 'O'
 )
 
-const LOOP_BREAKER = 4 // magic number, I started with 10 and reduced it down to 4.
-// It might be different for other inputs.
-
-func traverse(F [][]byte, start [2]int, sdir byte, loopcnt int) (int, bool) {
-	visited := make(map[[2]int]int)
-	maxv := 0
+func traverse(F [][]byte, start [2]int, sdir byte) (int, bool) {
+	v2 := make(map[uint16]struct{})
+	v3 := make(map[uint32]struct{})
 
 	pos := start
 	dir := sdir
+	var p2 uint16
+	var p3 uint32
 	for pos[0] >= 0 && pos[0] < len(F) && pos[1] >= 0 && pos[1] < len(F[pos[0]]) {
-		visited[pos]++
-		if visited[pos] > loopcnt {
-			// I guess, this is a loop
+		p2 = uint16(pos[0])<<8 + uint16(pos[1])
+		p3 = uint32(pos[0])<<16 + uint32(pos[1])<<8 + uint32(dir)
+		v2[p2] = struct{}{}
+		if _, ok := v3[p3]; ok {
 			return -1, false
 		}
-		maxv = max(maxv, visited[pos])
+		v3[p3] = struct{}{}
 		move := MOVE[dir]
 		ni, nj := pos[0]+move[0], pos[1]+move[1]
 		if ni < 0 || ni >= len(F) || nj < 0 || nj >= len(F[ni]) {
@@ -45,11 +44,10 @@ func traverse(F [][]byte, start [2]int, sdir byte, loopcnt int) (int, bool) {
 			dir = TURN[dir]
 			continue
 		}
-		F[ni][nj] = 'X'
 		pos = [2]int{ni, nj}
 	}
 
-	return len(visited), true
+	return len(v2), true
 }
 
 func main() {
@@ -68,22 +66,19 @@ func main() {
 		}
 	}
 
-	FCP := copyNumField(F)
-	steps1, _ := traverse(FCP, start, dir, LOOP_BREAKER)
+	steps1, _ := traverse(F, start, dir)
 	printf("steps1: %d", steps1)
 
 	obst := 0
 	for i := 0; i < len(F); i++ {
 		for j := 0; j < len(F[i]); j++ {
-			FCP := copyNumField(F)
-			if FCP[i][j] == EMPTY {
-				FCP[i][j] = OBSTACLE
-
-				if _, ok := traverse(FCP, start, dir, LOOP_BREAKER); !ok {
+			if F[i][j] == EMPTY {
+				F[i][j] = OBSTACLE
+				if _, ok := traverse(F, start, dir); !ok {
 					// found a loop
 					obst++
-					FCP[i][j] = EXTRA
 				}
+				F[i][j] = EMPTY
 			}
 		}
 	}
