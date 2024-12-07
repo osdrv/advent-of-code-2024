@@ -117,7 +117,7 @@ func parseInts(s string) []int {
 	return nums
 }
 
-func numDigs(n int) int {
+func numDigs[N Number](n N) int {
 	d := 1
 	for n >= 10 {
 		d += 1
