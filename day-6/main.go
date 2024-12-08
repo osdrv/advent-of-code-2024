@@ -1,17 +1,28 @@
 package main
 
+import (
+	"sort"
+)
+
+const (
+	DOWN  = 'v'
+	UP    = '^'
+	LEFT  = '<'
+	RIGHT = '>'
+)
+
 var TURN = map[byte]byte{
-	'^': '>',
-	'>': 'v',
-	'v': '<',
-	'<': '^',
+	UP:    RIGHT,
+	RIGHT: DOWN,
+	DOWN:  LEFT,
+	LEFT:  UP,
 }
 
 var MOVE = map[byte][2]int{
-	'^': {-1, 0},
-	'>': {0, 1},
-	'v': {1, 0},
-	'<': {0, -1},
+	UP:    {-1, 0},
+	RIGHT: {0, 1},
+	DOWN:  {1, 0},
+	LEFT:  {0, -1},
 }
 
 const (
@@ -50,11 +61,102 @@ func traverse(F [][]byte, start [2]int, sdir byte) (int, bool) {
 	return len(v2), true
 }
 
+func prevGt[N Number](nums []N, n N) int {
+	if len(nums) == 0 || n < nums[0] {
+		return -1
+	}
+	if n > nums[len(nums)-1] {
+		return len(nums) - 1
+	}
+	return sort.Search(len(nums), func(i int) bool {
+		return nums[i] > n
+	}) - 1
+}
+
+func nextLw[N Number](nums []N, n N) int {
+	if len(nums) == 0 || n > nums[len(nums)-1] {
+		return -1
+	}
+	if n < nums[0] {
+		return 0
+	}
+	return sort.Search(len(nums), func(i int) bool {
+		return nums[i] >= n
+	})
+}
+
+func insert(a []int, x int) []int {
+	res := make([]int, len(a)+1)
+	ix := sort.Search(len(a), func(i int) bool {
+		return a[i] > x
+	})
+	copy(res[:ix], a[:ix])
+	res[ix] = x
+	copy(res[ix+1:], a[ix:])
+	return res
+}
+
+func hasLoop(vert, hor [][]int, start [2]int, sdir byte) bool {
+	dir := sdir
+	pos := start
+
+	visited := make(map[[3]int]bool)
+
+	for {
+		i, j := pos[0], pos[1]
+
+		vix := [3]int{i, j, int(dir)}
+		if _, ok := visited[vix]; ok {
+			return true
+		}
+		visited[vix] = true
+
+		ni, nj := i, j
+		switch dir {
+		case UP:
+			nix := prevGt(vert[j], i)
+			if nix == -1 {
+				goto NOLOOP
+			}
+			ni = vert[j][nix] + 1
+		case DOWN:
+			nix := nextLw(vert[j], i)
+			if nix == -1 {
+				goto NOLOOP
+			}
+			ni = vert[j][nix] - 1
+		case LEFT:
+			nix := prevGt(hor[i], j)
+			if nix == -1 {
+				goto NOLOOP
+			}
+			nj = hor[i][nix] + 1
+		case RIGHT:
+			nix := nextLw(hor[i], j)
+			if nix == -1 {
+				goto NOLOOP
+			}
+			nj = hor[i][nix] - 1
+		default:
+			panic("wtf")
+		}
+		pos = [2]int{ni, nj}
+		dir = TURN[dir]
+	}
+NOLOOP:
+	return false
+}
+
 func main() {
 	lines := input()
 	F := make([][]byte, 0, len(lines))
 	start := [2]int{-1, -1}
 	dir := byte(0)
+	obsts := make([][2]int, 0)
+
+	hor := make([][]int, len(lines))
+	vert := make([][]int, len(lines[0]))
+
 	for i, line := range lines {
 		F = append(F, []byte(line))
 		for j := 0; j < len(F[i]); j++ {
@@ -62,6 +164,11 @@ func main() {
 				start = [2]int{i, j}
 				dir = F[i][j]
 				F[i][j] = EMPTY
+			}
+			if F[i][j] == OBSTACLE {
+				obsts = append(obsts, [2]int{i, j})
+				hor[i] = append(hor[i], j)
+				vert[j] = append(vert[j], i)
 			}
 		}
 	}
@@ -74,13 +181,21 @@ func main() {
 		for j := 0; j < len(F[i]); j++ {
 			if F[i][j] == EMPTY {
 				F[i][j] = OBSTACLE
-				if _, ok := traverse(F, start, dir); !ok {
-					// found a loop
+				vertbak := vert[j]
+				horbak := hor[i]
+
+				vert[j] = insert(vert[j], i)
+				hor[i] = insert(hor[i], j)
+
+				if hasLoop(vert, hor, start, dir) {
+					debugf("extra obst at i: %d, j: %d creates a loop", i, j)
 					obst++
 				}
 				F[i][j] = EMPTY
+				vert[j] = vertbak
+				hor[i] = horbak
 			}
 		}
 	}
-	printf("obst: %d", obst)
+	printf("obst2: %d", obst)
 }
