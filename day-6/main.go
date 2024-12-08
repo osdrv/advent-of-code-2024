@@ -100,12 +100,12 @@ func hasLoop(vert, hor [][]int, start [2]int, sdir byte) bool {
 	dir := sdir
 	pos := start
 
-	visited := make(map[[3]int]bool)
+	visited := make(map[uint64]bool)
 
 	for {
 		i, j := pos[0], pos[1]
 
-		vix := [3]int{i, j, int(dir)}
+		vix := uint64(i)<<32 + uint64(j)<<16 + uint64(dir)
 		if _, ok := visited[vix]; ok {
 			return true
 		}
