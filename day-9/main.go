@@ -5,11 +5,60 @@ import (
 	"strings"
 )
 
+const (
+	BREAK   = true
+	NOBREAK = false
+)
+
 type File struct {
 	ID   int
 	Size int
 	Next *File
 	Prev *File
+}
+
+func (f *File) Copy() *File {
+	ptr := f
+	var head, prev, cur *File
+	for ptr != nil {
+		cur = &File{ID: ptr.ID, Size: ptr.Size}
+		if prev != nil {
+			cur.Prev = prev
+			prev.Next = cur
+		}
+		prev = cur
+		ptr = ptr.Next
+	}
+	return head
+}
+
+func expand2(s string) *File {
+	if len(s) == 0 {
+		return nil
+	}
+	var head, prev, cur *File
+	fid := 0
+	empty := false
+	ix := 0
+	for ix < len(s) {
+		cur = &File{ID: -1, Size: int(s[ix] - byte('0'))}
+		if !empty {
+			cur.ID = fid
+			fid++
+		}
+		cur.Prev = prev
+		if prev != nil {
+			prev.Next = cur
+		}
+		if head == nil {
+			head = cur
+		}
+		prev = cur
+		empty = !empty
+		ix++
+	}
+
+	return head
 }
 
 func expand(s string) []File {
@@ -92,19 +141,12 @@ func printFiles(head *File) string {
 	return buf.String()
 }
 
-func compact2(files []File) *File {
-	var head, tail, prev *File
-	for _, file := range files {
-		node := &File{ID: file.ID, Size: file.Size}
-		if prev != nil {
-			node.Prev = prev
-			prev.Next = node
-		}
-		if head == nil {
-			head = node
-		}
-		tail = node
-		prev = node
+func defrag(head *File, brk bool) *File {
+	ptr := head
+	var tail *File
+	for ptr != nil {
+		tail = ptr
+		ptr = ptr.Next
 	}
 
 	for tail != head {
@@ -114,11 +156,14 @@ func compact2(files []File) *File {
 		}
 		chead := head
 		for chead != tail {
-			if chead.ID >= 0 || chead.Size < tail.Size {
+			if chead.ID >= 0 {
 				chead = chead.Next
 				continue
 			}
-			//debugf("Found free block of size %d for node %d/%d between %d and %d", chead.Size, tail.ID, tail.Size, chead.Prev.ID, chead.Next.ID)
+			if chead.Size < tail.Size {
+				chead = chead.Next
+				continue
+			}
 			delta := chead.Size - tail.Size
 			chead.ID = tail.ID
 			chead.Size = tail.Size
@@ -133,23 +178,24 @@ func compact2(files []File) *File {
 				}
 			}
 			tail.ID = -1
+			// Compact adjacent empty files
+			if tail.Next != nil && tail.Next.ID < 0 {
+				tail.Size += tail.Next.Size
+				tail.Next = tail.Next.Next
+				if tail.Next != nil {
+					tail.Next.Prev = tail
+				}
+			}
+			if tail.Prev != nil && tail.Prev.ID < 0 {
+				tail.Prev.Size += tail.Size
+				tail.Prev.Next = tail.Next
+				if tail.Next != nil {
+					tail.Next.Prev = tail.Prev
+				}
+			}
 			break
 		}
 		tail = tail.Prev
-
-		prev = head
-		cur := head.Next
-		for cur != nil {
-			if cur.ID < 0 && prev.ID < 0 {
-				cur.Prev = prev.Prev
-				cur.Size += prev.Size
-				if cur.Prev != nil {
-					cur.Prev.Next = cur
-				}
-			}
-			prev = cur
-			cur = cur.Next
-		}
 	}
 
 	return head
@@ -189,13 +235,12 @@ func checksum2(head *File) uint64 {
 
 func main() {
 	lines := input()
-	files := expand(lines[0])
-	filescp := make([]File, len(files))
-	copy(filescp, files)
-	compacted := compact(files)
-	checksum := checksum(compacted)
-	printf("checksum: %d", checksum)
 
-	compacted2 := compact2(filescp)
+	files1 := expand(lines[0])
+	compacted1 := compact(files1)
+	printf("checksum1: %d", checksum(compacted1))
+
+	files2 := expand2(lines[0])
+	compacted2 := defrag(files2, NOBREAK)
 	printf("checksum2: %d", checksum2(compacted2))
 }
