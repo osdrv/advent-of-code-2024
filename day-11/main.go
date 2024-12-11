@@ -1,17 +1,5 @@
 package main
 
-func halves(n uint64) (uint64, uint64) {
-	nd := numDigs(n)
-	a, b := uint64(n), uint64(0)
-	bf := uint64(1)
-	for i := 0; i < nd/2; i++ {
-		b += (a % 10) * bf
-		bf *= 10
-		a /= 10
-	}
-	return a, b
-}
-
 func evolve(stones []int, n int) uint64 {
 	ss := make(map[uint64]uint64)
 
@@ -41,11 +29,6 @@ func evolve(stones []int, n int) uint64 {
 	}
 	return sum
 }
-
-const (
-	//NBLINKS = 75
-	NBLINKS = 25
-)
 
 func main() {
 	lines := input()

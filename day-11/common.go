@@ -117,7 +117,7 @@ func parseInts(s string) []int {
 	return nums
 }
 
-func numDigs[N Number](n N) int {
+func numDigs[N Integer](n N) int {
 	d := 1
 	for n >= 10 {
 		d += 1
@@ -126,15 +126,27 @@ func numDigs[N Number](n N) int {
 	return d
 }
 
-func glueNum(nn []int) int {
-	N := nn[0]
+func glueNum[N Integer](nn []N) N {
+	num := nn[0]
 	for i := 1; i < len(nn); i++ {
 		for k := 0; k < numDigs(nn[i]); k++ {
-			N *= 10
+			num *= 10
 		}
-		N += nn[i]
+		num += nn[i]
 	}
-	return N
+	return num
+}
+
+func halves[N Integer](n N) (N, N) {
+	nd := numDigs(n)
+	a, b := n, N(0)
+	bf := N(1)
+	for i := 0; i < nd/2; i++ {
+		b += (a % 10) * bf
+		bf *= 10
+		a /= 10
+	}
+	return a, b
 }
 
 func makeNumField[N Number](h, w int) [][]N {
