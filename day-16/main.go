@@ -28,6 +28,11 @@ const (
 	SCORE_ROT = 1000
 )
 
+type QueueItem struct {
+	P Point4x
+	H []Point2x
+}
+
 type Point4 struct {
 	x, y, z int
 	s       int
@@ -38,87 +43,74 @@ func (p Point4) Point3() Point3 {
 	return Point3{p.x, p.y, p.z}
 }
 
-func shortestPathScore(F [][]byte, start, end Point2) (int, map[int]bool) {
-	q := make([]Point4, 0, 1)
-	sp := Point4{
-		x: start.x,
-		y: start.y,
-		z: EAST,
-		s: 0,
-		h: []int{start.y<<32 | start.x},
-	}
-	q = append(q, sp)
-	V := make(map[Point3]int)
-	V[sp.Point3()] = sp.s
+func shortestPathScore(F [][]byte, start, end Point2x) (int, map[Point2x]struct{}) {
+	q := make([]QueueItem, 0, 1)
+	p := p4(start.x(), start.y(), EAST, 0)
+	q = append(q, QueueItem{
+		P: p,
+		H: []Point2x{start},
+	})
+	V := make(map[Point3x]int)
+	V[p.p3()] = p.s()
 
-	BT := make(map[int]bool)
+	BT := make(map[Point2x]struct{})
 
 	minScore := ALOT
-	var head Point4
+	var head QueueItem
 	for len(q) > 0 {
 		head, q = q[0], q[1:]
-		debugf("head: %+v", head)
-		if prev, ok := V[head.Point3()]; ok && prev < head.s {
-			debugf("%+v", V)
+		if prev, ok := V[head.P.p3()]; ok && prev < head.P.s() {
 			debugf("skip because we were here before with a lower score")
 			continue
 		}
-		score := head.s
-		if end.x == head.x && end.y == head.y {
+		score := head.P.s()
+		if end == head.P.p2() {
+			// if end.x == head.x && end.y == head.y {
 			debugf("reached end: %d", score)
 			if minScore < score {
 				continue
 			}
 			if minScore > score {
-				BT = make(map[int]bool)
+				BT = make(map[Point2x]struct{})
 			}
 			minScore = min(minScore, score)
-			for _, h := range head.h {
-				BT[h] = true
+			for _, h := range head.H {
+				BT[h] = struct{}{}
 			}
 			continue
 		}
 
-		cand1 := head
-		cand1.z += 1
-		cand1.z %= 4
-		cand1.s += SCORE_ROT
-		if prev, ok := V[cand1.Point3()]; !ok || prev >= cand1.s {
-			V[cand1.Point3()] = cand1.s
-			q = append(q, cand1)
+		cand1 := p4(head.P.x(), head.P.y(), (head.P.z()+1)%4, head.P.s()+SCORE_ROT)
+		if prev, ok := V[cand1.p3()]; !ok || prev >= cand1.s() {
+			V[cand1.p3()] = cand1.s()
+			q = append(q, QueueItem{cand1, head.H})
 		}
 
-		cand2 := head
-		cand2.z -= 1
-		cand2.z += 4
-		cand2.z %= 4
-		cand2.s += SCORE_ROT
-		if prev, ok := V[cand2.Point3()]; !ok || prev >= cand2.s {
-			V[cand2.Point3()] = cand2.s
-			q = append(q, cand2)
+		cand2 := p4(head.P.x(), head.P.y(), (head.P.z()+3)%4, head.P.s()+SCORE_ROT)
+		if prev, ok := V[cand2.p3()]; !ok || prev >= cand2.s() {
+			V[cand2.p3()] = cand2.s()
+			q = append(q, QueueItem{cand2, head.H})
 		}
 
-		cand3 := head
-		cand3.z += 2
-		cand3.z %= 4
-		cand3.s += 2 * SCORE_ROT
-		if prev, ok := V[cand3.Point3()]; !ok || prev >= cand3.s {
-			V[cand3.Point3()] = cand3.s
-			q = append(q, cand3)
+		cand3 := p4(head.P.x(), head.P.y(), (head.P.z()+2)%4, head.P.s()+2*SCORE_ROT)
+		if prev, ok := V[cand3.p3()]; !ok || prev >= cand3.s() {
+			V[cand3.p3()] = cand3.s()
+			q = append(q, QueueItem{cand3, head.H})
 		}
 
-		cand4 := head
-		cand4.x += STEPS[cand4.z].x
-		cand4.y += STEPS[cand4.z].y
-		cand4.s += SCORE_MOV
-		if F[cand4.y][cand4.x] != WALL {
-			if prev, ok := V[cand4.Point3()]; !ok || prev >= cand4.s {
-				V[cand4.Point3()] = cand4.s
-				nh := make([]int, len(head.h))
-				copy(nh, head.h)
-				nh = append(nh, cand4.y<<32|cand4.x)
-				cand4.h = nh
-				q = append(q, cand4)
+		cand4 := p4(
+			head.P.x()+STEPS[head.P.z()].x,
+			head.P.y()+STEPS[head.P.z()].y,
+			head.P.z(),
+			head.P.s()+SCORE_MOV,
+		)
+		if F[cand4.y()][cand4.x()] != WALL {
+			if prev, ok := V[cand4.p3()]; !ok || prev >= cand4.s() {
+				V[cand4.p3()] = cand4.s()
+				nh := make([]Point2x, len(head.H))
+				copy(nh, head.H)
+				nh = append(nh, cand4.p2())
+				q = append(q, QueueItem{cand4, nh})
 			}
 		}
 	}
@@ -126,24 +118,17 @@ func shortestPathScore(F [][]byte, start, end Point2) (int, map[int]bool) {
 	return minScore, BT
 }
 
-func printTiles(tiles map[int]bool) {
-	for p := range tiles {
-		x, y := p&0xFFFFFFFF, p>>32
-		debugf("t: {x: %d, y: %d}", x, y)
-	}
-}
-
 func main() {
 	lines := input()
 	F := make([][]byte, 0, len(lines))
-	var start, end Point2
+	var start, end Point2x
 	for i, line := range lines {
 		F = append(F, []byte(line))
 		for j := 0; j < len(lines[i]); j++ {
 			if lines[i][j] == START {
-				start = Point2{x: j, y: i}
+				start = p2(j, i)
 			} else if lines[i][j] == END {
-				end = Point2{x: j, y: i}
+				end = p2(j, i)
 			}
 		}
 	}
@@ -153,8 +138,6 @@ func main() {
 	res1, tiles := shortestPathScore(F, start, end)
 	printf("res1: %d", res1)
 	res2 := len(tiles)
-
-	printTiles(tiles)
 
 	printf("res2: %d", res2)
 }

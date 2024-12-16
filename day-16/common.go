@@ -919,3 +919,75 @@ func popcount[N Integer](n N) int {
 	}
 	return cnt
 }
+
+type Point2x uint64
+
+func p2(x, y int) Point2x {
+	return Point2x((uint64(y)&0xFFF)<<12 | (uint64(x) & 0xFFF))
+}
+
+func (p2 Point2x) x() int {
+	return int(p2 & 0xFFF)
+}
+
+func (p2 Point2x) y() int {
+	return int((p2 >> 12) & 0xFFF)
+}
+
+type Point3x uint64
+
+func p3(x, y, z int) Point3x {
+	return Point3x((uint64(z)&0xFFF)<<24 |
+		(uint64(y)&0xFFF)<<12 |
+		(uint64(x) & 0xFFF))
+}
+
+func (p3 Point3x) x() int {
+	return int(p3 & 0xFFF)
+}
+
+func (p3 Point3x) y() int {
+	return int((p3 >> 12) & 0xFFF)
+}
+
+func (p3 Point3x) z() int {
+	return int((p3 >> 24) & 0xFFF)
+}
+
+func (p3 Point3x) p2() Point2x {
+	return Point2x(uint64(p3) & 0xFFFFFF)
+}
+
+type Point4x uint64
+
+func p4(x, y, z, s int) Point4x {
+	return Point4x((uint64(s)&0xFFFFFFF)<<36 |
+		(uint64(z)&0xFFF)<<24 |
+		(uint64(y)&0xFFF)<<12 |
+		(uint64(x) & 0xFFF))
+
+}
+
+func (p4 Point4x) x() int {
+	return int(p4 & 0xFFF)
+}
+
+func (p4 Point4x) y() int {
+	return int((p4 >> 12) & 0xFFF)
+}
+
+func (p4 Point4x) z() int {
+	return int((p4 >> 24) & 0xFFF)
+}
+
+func (p4 Point4x) s() int {
+	return int(p4 >> 36)
+}
+
+func (p4 Point4x) p2() Point2x {
+	return Point2x(uint64(p4) & 0xFFFFFF)
+}
+
+func (p4 Point4x) p3() Point3x {
+	return Point3x(uint64(p4) & 0xFFFFFFFFF)
+}
