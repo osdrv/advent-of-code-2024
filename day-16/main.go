@@ -65,7 +65,6 @@ func shortestPathScore(F [][]byte, start, end Point2x) (int, map[Point2x]struct{
 		}
 		score := head.P.s()
 		if end == head.P.p2() {
-			// if end.x == head.x && end.y == head.y {
 			debugf("reached end: %d", score)
 			if minScore < score {
 				continue
