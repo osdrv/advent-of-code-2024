@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 func readPoint(s string) Point2 {
 	var p Point2
@@ -22,11 +25,6 @@ func shortestPath(S, E Point2, B []Point2) int {
 	for _, b := range B {
 		F[b.y][b.x] = OBST
 	}
-
-	// fmt.Println(printNumFieldWithSubs(F, "", map[int]string{
-	// 	0: ".",
-	// 	1: "#",
-	// }))
 
 	minpath := ALOT
 	var H Point3
@@ -82,12 +80,9 @@ func main() {
 	res1 := shortestPath(S, E, B[:nBytes])
 	printf("res1: %d", res1)
 
-	for i := 1; i < len(B); i++ {
-		v := shortestPath(S, E, B[:nBytes+i])
-		if v == ALOT {
-			lastb := B[nBytes+i-1]
-			printf("res2: %d,%d", lastb.x, lastb.y)
-			break
-		}
-	}
+	ix = sort.Search(len(B)-nBytes, func(i int) bool {
+		return shortestPath(S, E, B[:nBytes+i]) == ALOT
+	})
+	p := B[nBytes+ix-1]
+	printf("res2: %d,%d", p.x, p.y)
 }
