@@ -86,20 +86,12 @@ func computeCands(DIST map[Point2]int, p Point2, R int) []Point2 {
 }
 
 func countShortcuts(P []Point2, R int) map[int]int {
-	minx, miny, maxx, maxy := ALOT, ALOT, -ALOT, -ALOT
 	DIST := make(map[Point2]int)
 	for dist, p := range P {
 		DIST[p] = dist
-		minx = min(minx, p.x)
-		miny = min(miny, p.y)
-		maxx = max(maxx, p.x)
-		maxy = max(maxy, p.y)
 	}
 
-	debugf("minx: %d, miny: %d, maxx: %d, maxy: %d", minx, miny, maxx, maxy)
-
 	DISTCNT := make(map[int]int)
-
 	for dist, p := range P {
 		cands := computeCands(DIST, p, R)
 		for _, cand := range cands {
