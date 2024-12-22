@@ -1,13 +1,16 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 )
 
 var (
+	LEX    = make(map[string]int)
+	LEXCNT = 0
+	LEXIX  = make(map[int]string)
+
 	NUMERIC = [][]byte{
 		{'7', '8', '9'},
 		{'4', '5', '6'},
@@ -20,262 +23,328 @@ var (
 		{'<', 'v', '>'},
 	}
 
-	PATH_MOVE = map[Point2]byte{
-		{x: 1, y: 0}:  '>',
-		{x: -1, y: 0}: '<',
-		{x: 0, y: 1}:  'v',
-		{x: 0, y: -1}: '^',
+	MOVES = map[[2]int]byte{
+		{0, 1}:  '>',
+		{0, -1}: '<',
+		{1, 0}:  'v',
+		{-1, 0}: '^',
+		{0, 0}:  'A',
 	}
 )
 
-func parseNum(s string) int {
-	n, err := strconv.Atoi(s[:len(s)-1])
-	noerr(err)
-	return n
+func Lookup(n int) string {
+	return LEXIX[n]
 }
 
-func find(F [][]byte, B byte) Point2 {
-	for i := 0; i < len(F); i++ {
-		for j := 0; j < len(F[i]); j++ {
-			if F[i][j] == B {
-				return Point2{x: j, y: i}
-			}
-		}
+func Lexem(s string) int {
+	if _, ok := LEX[s]; !ok {
+		LEXIX[LEXCNT] = s
+		LEX[s] = LEXCNT
+		LEXCNT++
 	}
-	panic("wtf")
-}
-
-type QItem struct {
-	P    Point2
-	D    int
-	IX   int
-	Path []byte
-}
-
-func traverse(F [][]byte, start Point2, path string) []string {
-	Q := make([]QItem, 0, 1)
-	Q = append(Q, QItem{
-		P:    start,
-		D:    0,
-		IX:   0,
-		Path: []byte{},
-	})
-
-	mindist := ALOT
-	minpaths := make([]string, 0, 1)
-	var H QItem
-	V := make(map[Point3]int)
-	for len(Q) > 0 {
-		H, Q = Q[0], Q[1:]
-		p3 := Point3{x: H.P.x, y: H.P.y, z: H.IX}
-		if prev, ok := V[p3]; ok && prev < H.D {
-			continue
-		}
-		V[p3] = H.D
-		if F[H.P.y][H.P.x] == path[H.IX] {
-			H.IX++
-			H.Path = append(H.Path, 'A')
-			if H.IX >= len(path) {
-				if mindist >= H.D {
-					if mindist > H.D {
-						minpaths = make([]string, 0, 1)
-					}
-					mindist = min(mindist, H.D)
-					minpaths = append(minpaths, string(H.Path))
-				}
-				continue
-			}
-			if path[H.IX-1] == path[H.IX] {
-				Q = append(Q, H)
-				continue
-			}
-		}
-
-		for _, s := range STEPS4 {
-			nx, ny := H.P.x+s[0], H.P.y+s[1]
-			if nx < 0 || nx >= len(F[0]) || ny < 0 || ny >= len(F) || F[ny][nx] == 0 {
-				continue
-			}
-			p3 = Point3{x: nx, y: ny, z: H.IX}
-			d := H.D + 1
-			if prev, ok := V[p3]; ok && prev < d {
-				continue
-			}
-			path := make([]byte, len(H.Path)+1)
-			copy(path, H.Path)
-			path[len(path)-1] = PATH_MOVE[Point2{x: s[0], y: s[1]}]
-			Q = append(Q, QItem{
-				P:    Point2{x: nx, y: ny},
-				D:    d,
-				IX:   H.IX,
-				Path: path,
-			})
-		}
-	}
-
-	return minpaths
-}
-
-type Cost struct {
-	S string
-	C int
+	return LEX[s]
 }
 
 type Path struct {
-	Segms map[string]int
+	Segms  map[int]uint64
+	Len    uint64
+	_str   string
+	_score uint64
 }
 
 func NewPath() *Path {
-	return &Path{Segms: make(map[string]int)}
-}
-
-func (p *Path) Len() int {
-	res := 0
-	for segm, cnt := range p.Segms {
-		res += len(segm) * cnt
+	return &Path{
+		Segms:  make(map[int]uint64),
+		Len:    0,
+		_str:   "",
+		_score: 0,
 	}
-	return res
-}
-
-func (p *Path) String() string {
-	return fmt.Sprintf("Path{Segms:%+v, Len: %d}", p.Segms, p.Len())
 }
 
 func (p *Path) Copy() *Path {
-	scp := make(map[string]int)
-	for seg, cnt := range p.Segms {
-		scp[seg] = cnt
+	cp := NewPath()
+	cp.Len = p.Len
+	for n, cnt := range p.Segms {
+		cp.Segms[n] = cnt
 	}
-	return &Path{
-		Segms: scp,
-	}
+	cp._str = p._str
+	cp._score = p._score
+	return cp
 }
 
-func (p *Path) Signature() string {
-	keys := make([]string, 0, len(p.Segms))
-	for segm := range p.Segms {
-		keys = append(keys, segm)
+func (p *Path) AddSegm(segm string, cnt uint64) {
+	p._str = ""
+	p._score = 0
+	n := Lexem(segm)
+	p.Segms[n] += cnt
+	p.Len += uint64(len(segm)) * cnt
+}
+
+func (p *Path) String() string {
+	if len(p._str) > 0 {
+		return p._str
 	}
-	sort.Strings(keys)
+	nums := make([]int, 0, len(p.Segms))
+	for segm := range p.Segms {
+		nums = append(nums, segm)
+	}
+	sort.Slice(nums, func(i, j int) bool {
+		return Lookup(nums[i]) < Lookup(nums[j])
+	})
 	var b strings.Builder
-	b.WriteString("Path{")
-	for i, segm := range keys {
+	b.WriteString("Path[Segms:{")
+	for i, num := range nums {
 		if i > 0 {
 			b.WriteByte(' ')
 		}
-		b.WriteString(segm)
+		b.WriteString(Lookup(num))
 		b.WriteByte(':')
-		b.WriteString(strconv.Itoa(p.Segms[segm]))
+		b.WriteString(strconv.FormatUint(p.Segms[num], 10))
 	}
-	b.WriteByte('}')
-	return b.String()
+	b.WriteString("} Len:")
+	b.WriteString(strconv.FormatUint(p.Len, 10))
+	b.WriteByte(']')
+
+	p._str = b.String()
+
+	return p._str
+}
+
+// The score is based on the observation that paths start deviate in length after the second path
+func (p *Path) Score() uint64 {
+	if p._score > 0 {
+		return p._score
+	}
+	score := ALOT64u
+	for n, cnt := range p.Segms {
+		subpp := traverse(DIRECTIONAL, Point2{x: 2, y: 0}, Lookup(n))
+		minsubsubscore := ALOT64u
+		for _, subp := range subpp {
+			subsubscore := uint64(0)
+			for subn, subcnt := range subp.Segms {
+				subsubpp := traverse(DIRECTIONAL, Point2{x: 2, y: 0}, Lookup(subn))
+				subsubscore += subsubpp[0].Len * subcnt
+			}
+			minsubsubscore = min(minsubsubscore, subsubscore)
+		}
+		score += minsubsubscore * cnt
+	}
+	p._score = score
+	return score
 }
 
 func ParsePath(s string) *Path {
-	p := &Path{
-		Segms: make(map[string]int),
-	}
-	pix, ix := 0, 0
+	path := NewPath()
+	ix := 0
+	pix := 0
 	for ix < len(s) {
 		if s[ix] == 'A' {
-			//if pix != ix {
-			p.Segms[s[pix:ix+1]]++
-			//}
+			path.AddSegm(s[pix:ix+1], 1)
 			ix++
 			pix = ix
 		} else {
 			ix++
 		}
 	}
-	if pix != ix {
-		p.Segms[s[pix:ix]]++
+	if ix != pix {
+		path.AddSegm(s[pix:ix+1], 1)
 	}
-	return p
+	return path
 }
 
-func findShortest(F [][]byte, MEMO map[string][]string, start Point2, path *Path) []*Path {
-	cands := make([]*Path, 0, 1)
-	cands = append(cands, NewPath())
-	uniq := make(map[string]bool)
-	for segm, cnt := range path.Segms {
-		newcands := make([]*Path, 0, 1)
-		var alts []string
-		if prev, ok := MEMO[segm]; ok {
-			alts = prev
-		} else {
-			alts = traverse(F, start, segm)
-			MEMO[segm] = alts
-		}
-		minlen := ALOT
-		for _, altpath := range alts {
-			altp := ParsePath(altpath)
-			for _, cand := range cands {
-				candcp := cand.Copy()
-				for newsegm, newcnt := range altp.Segms {
-					candcp.Segms[newsegm] += cnt * newcnt
-				}
-				newcands = append(newcands, candcp)
-			}
-		}
-		cands = make([]*Path, 0, 1)
-		for _, cand := range newcands {
-			if l := cand.Len(); l <= minlen {
-				if l < minlen {
-					minlen = l
-					cands = make([]*Path, 0, 1)
-				}
-				if sign := cand.Signature(); !uniq[sign] {
-					uniq[sign] = true
-					cands = append(cands, cand)
-				}
-			}
-		}
-	}
-
-	return cands
+type QItem struct {
+	P    Point2
+	Ix   int
+	Path []byte
 }
 
-func minUniqPaths(paths []*Path) []*Path {
-	res := make([]*Path, 0, 1)
+var (
+	MEMO = make(map[string][]*Path)
+)
+
+func traverse(F [][]byte, start Point2, path string) []*Path {
+	if prev, ok := MEMO[path]; ok {
+		return prev
+	}
+	Q := make([]QItem, 0, 1)
+	Q = append(Q, QItem{
+		P:    start,
+		Ix:   0,
+		Path: []byte{},
+	})
+
+	V := make(map[Point3]int)
+
+	opts := make([]string, 0, 1)
 	minlen := ALOT
-	cmap := make(map[string]*Path)
-	for _, cand := range paths {
-		if cl := cand.Len(); cl <= minlen {
-			if cl < minlen {
-				minlen = cl
-				cmap = make(map[string]*Path)
+	var H QItem
+	for len(Q) > 0 {
+		H, Q = Q[0], Q[1:]
+		p3 := Point3{x: H.P.x, y: H.P.y, z: H.Ix}
+		if prev, ok := V[p3]; ok && prev < len(H.Path) {
+			continue
+		}
+		V[p3] = len(H.Path)
+		if F[H.P.y][H.P.x] == path[H.Ix] {
+			H.Path = append(H.Path, 'A')
+			H.Ix++
+			if H.Ix >= len(path) {
+				if minlen >= len(H.Path) {
+					if minlen > len(H.Path) {
+						opts = make([]string, 0, 1)
+						minlen = len(H.Path)
+					}
+					opts = append(opts, string(H.Path))
+				}
+			} else {
+				Q = append(Q, H)
 			}
-			cmap[cand.Signature()] = cand
+			continue
+		}
+
+		for _, step := range STEPS4 {
+			ny, nx := H.P.y+step[0], H.P.x+step[1]
+			if ny < 0 || ny >= len(F) || nx < 0 || nx >= len(F[0]) || F[ny][nx] == 0 {
+				continue
+			}
+			p3 = Point3{x: nx, y: ny, z: H.Ix}
+			newpath := make([]byte, len(H.Path)+1)
+			copy(newpath, H.Path)
+			newpath[len(newpath)-1] = MOVES[step]
+			if prev, ok := V[p3]; ok && prev < len(newpath) {
+				continue
+			}
+			Q = append(Q, QItem{
+				P:    Point2{x: nx, y: ny},
+				Ix:   H.Ix,
+				Path: newpath,
+			})
 		}
 	}
-	for _, cand := range cmap {
-		res = append(res, cand)
+
+	res := make([]*Path, 0, len(opts))
+	for _, opt := range opts {
+		res = append(res, ParsePath(opt))
+	}
+
+	MEMO[path] = res
+
+	return res
+}
+
+var (
+	PMEMO = make(map[string][]*Path)
+)
+
+func traversePath(F [][]byte, start Point2, path *Path) []*Path {
+	if prev, ok := PMEMO[path.String()]; ok {
+		debugf("memo hit!")
+		return prev
+	}
+
+	newpaths := []*Path{NewPath()}
+
+	for n, cnt := range path.Segms {
+		segm := Lookup(n)
+		opts := traverse(F, start, segm)
+		newnewpaths := make([]*Path, 0, len(newpaths)*len(opts))
+
+		for _, opt := range opts {
+			for _, prevpath := range newpaths {
+				newpath := prevpath.Copy()
+				for newn, newcnt := range opt.Segms {
+					newpath.AddSegm(Lookup(newn), newcnt*cnt)
+				}
+				newnewpaths = append(newnewpaths, newpath)
+			}
+		}
+
+		newpaths = newnewpaths
+	}
+
+	res := make([]*Path, 0, 1)
+	minlen := ALOT64u
+	isSeen := make(map[string]bool)
+	for _, newpath := range newpaths {
+		if newpath.Len <= minlen {
+			if newpath.Len < minlen {
+				minlen = newpath.Len
+				res = make([]*Path, 0, 1)
+				isSeen = make(map[string]bool)
+			}
+			if str := newpath.String(); !isSeen[str] {
+				isSeen[str] = true
+				res = append(res, newpath)
+			}
+		}
+	}
+
+	PMEMO[path.String()] = res
+
+	return res
+}
+
+func shortestUniqPaths(F [][]byte, start Point2, paths []*Path) []*Path {
+	minlen := ALOT64u
+	minpaths := make([]*Path, 0, 1)
+	isSeen := make(map[string]bool)
+	for _, path := range paths {
+		newpaths := traversePath(F, start, path)
+
+		for _, newpath := range newpaths {
+			if minlen >= newpath.Len {
+				if minlen > newpath.Len {
+					minlen = newpath.Len
+					minpaths = make([]*Path, 0, 1)
+					isSeen = make(map[string]bool)
+				}
+				if str := newpath.String(); !isSeen[str] {
+					isSeen[str] = true
+					minpaths = append(minpaths, newpath)
+				}
+			}
+		}
+	}
+
+	//return minpaths
+
+	res := make([]*Path, 0, 1)
+	minscore := ALOT64u
+	for _, minpath := range minpaths {
+		if score := minpath.Score(); score <= minscore {
+			if score < minscore {
+				res = make([]*Path, 0, 1)
+				minscore = score
+			}
+			res = append(res, minpath)
+		}
 	}
 	return res
 }
 
 func main() {
 	lines := input()
-	res1 := 0
-	MEMO := make(map[string][]string)
+	debugf("file data: %+v", lines)
+
+	debugf("A=%+v", ParsePath("A"))
+	debugf("AA=%+v", ParsePath("AA"))
+	debugf("<Av<A=%+v", ParsePath("<Av<A"))
+
+	res1 := uint64(0)
 	for _, line := range lines {
-		paths := findShortest(NUMERIC, MEMO, Point2{x: 2, y: 3}, ParsePath(line))
-		//debugf("paths: %+v", paths)
-		for i := 0; i < 2; i++ {
-			newpaths := make([]*Path, 0, 1)
-			for _, path := range paths {
-				newpaths = append(newpaths, findShortest(DIRECTIONAL, MEMO, Point2{x: 2, y: 0}, path)...)
-			}
-			paths = minUniqPaths(newpaths)
-			//debugf("paths2: %+v", paths)
-			debugf("len(paths2)=%d", len(paths))
+		n := uint64(parseInt(line[:len(line)-1]))
+		debugf("n: %d", n)
+		paths := []*Path{ParsePath(line)}
+		paths = shortestUniqPaths(NUMERIC, Point2{x: 2, y: 3}, paths)
+		for i := 0; i < 25; i++ {
+			debugf("i: %d", i)
+			debugf("path len: %d", len(paths))
+			paths = shortestUniqPaths(DIRECTIONAL, Point2{x: 2, y: 0}, paths)
 		}
-
-		n := parseNum(line)
-		d := paths[0].Len()
-
-		debugf("%d * %d = %d", n, d, n*d)
-		res1 += n * d
+		pathlen := paths[0].Len
+		debugf("%d * %d = %d", n, pathlen, n*pathlen)
+		res1 += n * pathlen
 	}
+
 	printf("res1=%d", res1)
 }
